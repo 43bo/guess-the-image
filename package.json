@@ -1,0 +1,9 @@
+{
+  "name": "guess-the-image",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Two-player online GuessIT game",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "^5.1.0", "socket.io": "^4.8.1" }
+}

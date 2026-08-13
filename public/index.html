@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>GUESSIT — figure out your card</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎴</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="table-glow" aria-hidden="true"></div>
+
+  <div id="toast-stack" class="toast-stack" aria-live="polite"></div>
+
+  <main id="app-root" class="app-root">
+
+    <!-- ============ HOME ============ -->
+    <section id="screen-home" class="screen screen-home active">
+      <div class="home-wrap">
+        <div class="brand">
+          <span class="brand-card" aria-hidden="true">🎴</span>
+          <h1 class="brand-title">GUESSIT</h1>
+        </div>
+        <p class="tagline">Can you figure out what's on your card?</p>
+
+        <div class="home-actions">
+          <button class="btn btn-primary btn-large" data-action="show-create">
+            <span>Create Room</span>
+          </button>
+          <button class="btn btn-ghost btn-large" data-action="show-join">
+            <span>Join Room</span>
+          </button>
+        </div>
+
+        <p class="home-footnote">2 players face off. A host runs the table. Everyone talks outside the app.</p>
+      </div>
+    </section>
+
+    <!-- ============ CREATE ROOM ============ -->
+    <section id="screen-create" class="screen screen-form">
+      <div class="form-card">
+        <button class="link-back" data-action="show-home">← Back</button>
+        <h2 class="form-title">Create Room</h2>
+        <label class="field-label" for="create-name">Your Name</label>
+        <input id="create-name" class="text-input" type="text" maxlength="18" placeholder="Enter your name" autocomplete="off" />
+        <p class="field-error" id="create-error"></p>
+        <button class="btn btn-primary btn-large btn-block" data-action="submit-create">Create Room</button>
+      </div>
+    </section>
+
+    <!-- ============ JOIN ROOM ============ -->
+    <section id="screen-join" class="screen screen-form">
+      <div class="form-card">
+        <button class="link-back" data-action="show-home">← Back</button>
+        <h2 class="form-title">Join Room</h2>
+        <label class="field-label" for="join-name">Your Name</label>
+        <input id="join-name" class="text-input" type="text" maxlength="18" placeholder="Enter your name" autocomplete="off" />
+        <label class="field-label" for="join-code">Room Code</label>
+        <input id="join-code" class="text-input code-input" type="text" maxlength="6" placeholder="ABC123" autocomplete="off" />
+        <p class="field-error" id="join-error"></p>
+        <button class="btn btn-primary btn-large btn-block" data-action="submit-join">Join Room</button>
+      </div>
+    </section>
+
+    <!-- ============ ROOM (host or player — content rendered dynamically) ============ -->
+    <section id="screen-room" class="screen screen-room">
+      <header class="room-header">
+        <div class="room-header-left">
+          <span class="room-code-chip" id="room-code-chip">——————</span>
+          <span class="role-chip" id="role-chip"></span>
+        </div>
+        <div class="room-header-right" id="round-chip"></div>
+      </header>
+      <div id="room-content" class="room-content"></div>
+    </section>
+
+  </main>
+
+  <!-- Reusable guess modal (players) -->
+  <div id="guess-modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <h3 class="modal-title">What is your image?</h3>
+      <input id="guess-input" class="text-input" type="text" maxlength="80" placeholder="Enter your guess" autocomplete="off" />
+      <p class="field-error" id="guess-error"></p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" data-action="close-guess">Cancel</button>
+        <button class="btn btn-primary" data-action="submit-guess">Submit Guess</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
