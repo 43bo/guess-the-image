@@ -108,6 +108,11 @@ function removeSocket(socketId) {
   return info || null;
 }
 
+function revealImages(room) {
+  room.gameState = 'revealed';
+  touch(room);
+}
+
 function awardPoint(room, playerKey) {
   if (!['player1', 'player2'].includes(playerKey)) return false;
   room.scores[playerKey] += 1;
@@ -115,6 +120,12 @@ function awardPoint(room, playerKey) {
   room.gameState = 'roundEnd';
   touch(room);
   return true;
+}
+
+function skipPoint(room) {
+  room.roundWinner = null;
+  room.gameState = 'roundEnd';
+  touch(room);
 }
 
 function startNextRound(room, category, image1, image2) {
@@ -134,6 +145,9 @@ function publicPlayer(room, key) {
 
 function sanitizeForPlayer(room, role) {
   const opponent = otherPlayerKey(role);
+  // Own image stays hidden while guessing is still in progress, and only
+  // becomes visible once the controller reveals it (or the round is over).
+  const revealPhase = ['revealed', 'roundEnd', 'gameOver'].includes(room.gameState);
   return {
     role,
     isController: role === 'player1',
@@ -147,9 +161,9 @@ function sanitizeForPlayer(room, role) {
       player1: publicPlayer(room, 'player1'),
       player2: publicPlayer(room, 'player2'),
     },
-    myImageHidden: true,
-    // Only the opponent's image is sent to this player.
-    // The player's own image is never included in the payload.
+    myImageHidden: !revealPhase,
+    myImage: revealPhase && room.images[role] ? { ...room.images[role] } : null,
+    // The opponent's image is always sent to this player.
     opponentImage: room.images[opponent] ? { ...room.images[opponent] } : null,
     scores: { ...room.scores },
     roundWinner: room.roundWinner,
@@ -195,7 +209,9 @@ module.exports = {
   bothPlayersConnected,
   otherPlayerKey,
   touch,
+  revealImages,
   awardPoint,
+  skipPoint,
   startNextRound,
   resetToLobby,
   deleteRoom,

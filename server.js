@@ -84,6 +84,9 @@ function broadcastRoomState(room) {
     if (state.opponentImage) {
       state.opponentImage.url = createImageUrl(state.opponentImage, room.roomCode, role);
     }
+    if (state.myImage) {
+      state.myImage.url = createImageUrl(state.myImage, room.roomCode, role);
+    }
     io.to(socketId).emit('roomState', state);
   }
 }
@@ -168,11 +171,22 @@ io.on('connection', (socket) => {
     broadcastRoomState(room);
   });
 
+  socket.on('revealImages', () => {
+    const ctx = requireController(socket);
+    if (!ctx) return;
+    const { room } = ctx;
+    if (room.gameState !== 'playing') return emitError(socket, 'Nothing to reveal right now.');
+
+    store.revealImages(room);
+    io.to(room.roomCode).emit('imagesRevealed');
+    broadcastRoomState(room);
+  });
+
   socket.on('awardPoint', ({ player } = {}) => {
     const ctx = requireController(socket);
     if (!ctx) return;
     const { room } = ctx;
-    if (room.gameState !== 'playing') return emitError(socket, 'The round is not active.');
+    if (room.gameState !== 'revealed') return emitError(socket, 'Reveal the images before awarding a point.');
     if (!['player1', 'player2'].includes(player)) return emitError(socket, 'Invalid player.');
 
     store.awardPoint(room, player);
@@ -181,6 +195,17 @@ io.on('connection', (socket) => {
       playerName: room.players[player].name,
       scores: { ...room.scores },
     });
+    broadcastRoomState(room);
+  });
+
+  socket.on('noPoint', () => {
+    const ctx = requireController(socket);
+    if (!ctx) return;
+    const { room } = ctx;
+    if (room.gameState !== 'revealed') return emitError(socket, 'Reveal the images first.');
+
+    store.skipPoint(room);
+    io.to(room.roomCode).emit('roundTied');
     broadcastRoomState(room);
   });
 

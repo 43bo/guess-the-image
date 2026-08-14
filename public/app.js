@@ -39,8 +39,9 @@ document.addEventListener('click', e => {
   if (a === 'submit-join') return joinRoom();
   if (a === 'start-game') return startGame(btn.dataset.category);
   if (a === 'next-round') return startNextRound(btn.dataset.category || latestState?.category);
-  if (a === 'award') return openAwardPanel();
+  if (a === 'reveal-images') return revealImages();
   if (a === 'award-player') return awardPoint(btn.dataset.player);
+  if (a === 'no-point') return noPoint();
   if (a === 'set-turn') return setTurn(btn.dataset.player);
   if (a === 'end-game') return endGame();
   if (a === 'restart-game') return restartGame();
@@ -68,13 +69,11 @@ function joinRoom() {
 function startGame(category) { socket.emit('startGame', { category }); }
 function startNextRound(category) { socket.emit('nextRound', { category }); }
 function setTurn(player) { socket.emit('setTurn', { player }); }
+function revealImages() { socket.emit('revealImages'); }
 function awardPoint(player) { socket.emit('awardPoint', { player }); }
+function noPoint() { socket.emit('noPoint'); }
 function endGame() { socket.emit('endGame'); }
 function restartGame() { socket.emit('restartGame'); }
-function openAwardPanel() {
-  const panel = $('#award-panel');
-  if (panel) panel.scrollIntoView({behavior:'smooth', block:'center'});
-}
 
 socket.on('categories', data => { categories = data || []; });
 socket.on('roomCreated', ({roomCode, role}) => {
@@ -90,7 +89,9 @@ socket.on('playerLeft', () => toast('Player 2 disconnected.', 'error'));
 socket.on('controllerDisconnected', ({message}) => { toast(message, 'error'); setTimeout(() => location.reload(), 1400); });
 socket.on('roundStarted', ({round, category}) => { selectedCategory = category; toast(`Round ${round} started`, 'success'); });
 socket.on('turnChanged', ({player}) => toast(`Turn: ${player === 'player1' ? latestState?.players.player1?.name : latestState?.players.player2?.name}`));
+socket.on('imagesRevealed', () => toast('Images revealed!', 'success'));
 socket.on('pointAwarded', ({playerName}) => toast(`${playerName} gets +1 point`, 'success'));
+socket.on('roundTied', () => toast('No one scored this round', ''));
 socket.on('gameEnded', ({winnerName}) => toast(winnerName ? `${winnerName} wins!` : 'It is a tie!', 'success'));
 socket.on('gameRestarted', () => { selectedCategory = null; toast('Game reset. Choose a category to start.'); });
 socket.on('roomState', state => {
@@ -198,11 +199,7 @@ function renderPlaying(s) {
     </div>
 
     ${controller ? `<div class="scene-controls">
-      <button class="scene-control-btn primary" data-action="award">✓ AWARD POINT</button>
-      <div class="scene-award-options" id="award-panel">
-        <button class="scene-control-btn" data-action="award-player" data-player="player1">+1 ${escapeHtml(s.players.player1?.name || 'Player 1')}</button>
-        <button class="scene-control-btn" data-action="award-player" data-player="player2">+1 ${escapeHtml(s.players.player2?.name || 'Player 2')}</button>
-      </div>
+      <button class="scene-control-btn primary" data-action="reveal-images">🔍 REVEAL IMAGES</button>
       <div class="scene-turn-controls">
         <button data-action="set-turn" data-player="player1">${escapeHtml(s.players.player1?.name || 'Player 1')}</button>
         <button data-action="set-turn" data-player="player2">${escapeHtml(s.players.player2?.name || 'Player 2')}</button>
@@ -210,6 +207,42 @@ function renderPlaying(s) {
     </div>` : ''}
 
     <div class="scene-communication">Talk outside the game · Discord · WhatsApp · Telegram</div>
+  </div>`;
+}
+function revealImageBox(image, label) {
+  if (!image) return `<div class="reveal-image-box reveal-image-empty"><span>${escapeHtml(label)}</span></div>`;
+  return `<div class="reveal-image-box"><img src="${escapeHtml(image.url)}" alt="${escapeHtml(label)}" loading="eager"
+    onerror="if(!this.dataset.retried){this.dataset.retried='1';this.src=(()=>{const u=new URL('${escapeHtml(image.url)}',location.origin);u.searchParams.set('retry',Date.now());return u.href;})();}else{this.style.display='none';this.parentElement.classList.add('image-failed');}"></div>`;
+}
+function renderRevealed(s) {
+  const p1 = s.players.player1?.name || 'Player 1';
+  const p2 = s.players.player2?.name || 'Player 2';
+  const myLabel = s.myName || 'You';
+  const oppRole = s.role === 'player1' ? 'player2' : 'player1';
+  const oppName = s.players[oppRole]?.name || (oppRole === 'player1' ? p1 : p2);
+
+  return `<div class="game-scene result-scene">
+    <div class="scene-background" aria-hidden="true"></div>
+    <div class="scene-vignette" aria-hidden="true"></div>
+    ${hud(s)}
+    <div class="result-card reveal-card">
+      <div class="result-kicker">IMAGES REVEALED</div>
+      <div class="reveal-images">
+        <div class="reveal-image-block">
+          <div class="reveal-image-label">${escapeHtml(myLabel)} (You)</div>
+          ${revealImageBox(s.myImage, myLabel)}
+        </div>
+        <div class="reveal-image-block">
+          <div class="reveal-image-label">${escapeHtml(oppName)}</div>
+          ${revealImageBox(s.opponentImage, oppName)}
+        </div>
+      </div>
+      ${s.role === 'player1' ? `<div class="reveal-award-actions">
+        <button class="scene-control-btn primary" data-action="award-player" data-player="player1">✓ ${escapeHtml(p1)}</button>
+        <button class="scene-control-btn primary" data-action="award-player" data-player="player2">✓ ${escapeHtml(p2)}</button>
+        <button class="scene-control-btn" data-action="no-point">No One</button>
+      </div>` : '<div class="result-waiting">Waiting for Player 1 to decide who scores this round…</div>'}
+    </div>
   </div>`;
 }
 function renderRoundEnd(s) {
@@ -221,9 +254,9 @@ function renderRoundEnd(s) {
     <div class="scene-vignette" aria-hidden="true"></div>
     ${hud(s)}
     <div class="result-card">
-      <div class="result-icon">✓</div>
+      <div class="result-icon">${winner ? '✓' : '–'}</div>
       <div class="result-kicker">ROUND ${s.round} COMPLETE</div>
-      <div class="result-title">${winner ? escapeHtml(winner) + ' gets the point!' : 'Round complete'}</div>
+      <div class="result-title">${winner ? escapeHtml(winner) + ' gets the point!' : 'No one scored this round'}</div>
       <div class="result-score">${escapeHtml(p1)} ${s.scores.player1} — ${s.scores.player2} ${escapeHtml(p2)}</div>
       ${s.role === 'player1' ? `<div class="result-actions">${categories.map(c => `<button class="scene-control-btn" data-action="next-round" data-category="${c.id}">${c.icon} ${escapeHtml(c.label)}</button>`).join('')}</div>` : '<div class="result-waiting">Waiting for Player 1 to start the next round…</div>'}
     </div>
@@ -253,10 +286,11 @@ function render() {
   $('#room-code-chip').textContent=s.roomCode;
   $('#role-chip').textContent=s.role==='player1'?'PLAYER 1 · CREATOR':'PLAYER 2';
   $('#round-chip').textContent=s.round?`Round ${s.round}`:'';
-  $('#screen-room').classList.toggle('game-mode', ['playing','roundEnd','gameOver'].includes(s.gameState));
+  $('#screen-room').classList.toggle('game-mode', ['playing','revealed','roundEnd','gameOver'].includes(s.gameState));
   let html='';
   if(s.gameState==='lobby') html=renderLobby(s);
   else if(s.gameState==='playing') html=renderPlaying(s);
+  else if(s.gameState==='revealed') html=renderRevealed(s);
   else if(s.gameState==='roundEnd') html=renderRoundEnd(s);
   else if(s.gameState==='gameOver') html=renderGameOver(s);
   $('#room-content').innerHTML=html;
