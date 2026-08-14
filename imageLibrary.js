@@ -1,17 +1,5 @@
 'use strict';
 
-// Local image library.
-// Put your real images in:
-//   public/assets/images/<category>/
-//
-// Example:
-//   public/assets/images/food/pizza.jpg
-//   public/assets/images/tools/hammer.png
-//   public/assets/images/furniture/sofa.webp
-//
-// The server scans these folders automatically. You do NOT need to edit this
-// file when adding/removing images.
-
 const fs = require('fs');
 const path = require('path');
 
@@ -25,6 +13,8 @@ const CATEGORY_META = {
   countries: { label: 'Countries', icon: '🌍' },
   footballPlayers: { label: 'Football Players', icon: '⚽' },
   celebrities: { label: 'Celebrities', icon: '⭐' },
+  animals: { label: 'Animals', icon: '🐾' },
+  mixed: { label: 'Mixed', icon: '🎲' },
 };
 
 const CATEGORY_DIRS = {
@@ -34,6 +24,7 @@ const CATEGORY_DIRS = {
   countries: 'countries',
   footballPlayers: 'football-players',
   celebrities: 'celebrities',
+  animals: 'animals',
 };
 
 function humanizeFilename(filename) {
@@ -49,19 +40,31 @@ function makeId(categoryId, filename) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
+
   return `${categoryId}-${base || 'image'}`;
 }
 
 function scanCategory(categoryId) {
   const dirName = CATEGORY_DIRS[categoryId];
+
+  if (!dirName) return [];
+
   const dir = path.join(IMAGE_ROOT, dirName);
+
   if (!fs.existsSync(dir)) return [];
 
   return fs.readdirSync(dir, { withFileTypes: true })
     .filter(entry => entry.isFile())
     .map(entry => entry.name)
-    .filter(filename => SUPPORTED_EXTENSIONS.has(path.extname(filename).toLowerCase()))
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }))
+    .filter(filename =>
+      SUPPORTED_EXTENSIONS.has(path.extname(filename).toLowerCase())
+    )
+    .sort((a, b) =>
+      a.localeCompare(b, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      })
+    )
     .map(filename => ({
       id: makeId(categoryId, filename),
       name: humanizeFilename(filename),
@@ -77,9 +80,11 @@ function getCategoryImages(categoryId) {
 
 function getAllImages() {
   const result = {};
-  for (const categoryId of Object.keys(CATEGORY_META)) {
+
+  for (const categoryId of Object.keys(CATEGORY_DIRS)) {
     result[categoryId] = scanCategory(categoryId);
   }
+
   return result;
 }
 
@@ -87,41 +92,69 @@ function getCategories() {
   return Object.entries(CATEGORY_META).map(([id, meta]) => ({
     id,
     ...meta,
-    imageCount: scanCategory(id).length,
+    imageCount:
+      id === 'mixed'
+        ? Object.keys(CATEGORY_DIRS)
+            .reduce((total, categoryId) => {
+              return total + scanCategory(categoryId).length;
+            }, 0)
+        : scanCategory(id).length,
   }));
 }
 
 function getImageById(id) {
   if (!id) return null;
-  for (const categoryId of Object.keys(CATEGORY_META)) {
+
+  for (const categoryId of Object.keys(CATEGORY_DIRS)) {
     const found = scanCategory(categoryId).find(img => img.id === id);
+
     if (found) return found;
   }
+
   return null;
 }
 
-function pickTwoRandom(categoryId) {
-  const list = scanCategory(categoryId);
-  if (list.length < 2) {
-    throw new Error(`Category "${categoryId}" needs at least 2 images. Found ${list.length}.`);
-  }
+function shuffle(array) {
+  const copy = [...array];
 
-  const copy = [...list];
   for (let i = copy.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
+
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
 
-  // Keep image metadata only. The URL is created by the server for the
-  // specific player receiving the opponent image.
-  return [copy[0], copy[1]];
+  return copy;
+}
+
+function pickTwoRandom(categoryId) {
+  let list;
+
+  if (categoryId === 'mixed') {
+    list = Object.keys(CATEGORY_DIRS)
+      .flatMap(category => scanCategory(category));
+  } else {
+    list = scanCategory(categoryId);
+  }
+
+  if (list.length < 2) {
+    throw new Error(
+      `Category "${categoryId}" needs at least 2 images. Found ${list.length}.`
+    );
+  }
+
+  const shuffled = shuffle(list);
+
+  return [shuffled[0], shuffled[1]];
 }
 
 function getImageFilePath(image) {
   if (!image?.relativePath) return null;
+
   const resolved = path.resolve(IMAGE_ROOT, image.relativePath);
   const root = path.resolve(IMAGE_ROOT) + path.sep;
+
   if (!resolved.startsWith(root)) return null;
+
   return resolved;
 }
 
